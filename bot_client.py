@@ -180,7 +180,13 @@ def main():
                             print ('No user named: %s' % msg_parts[1])
 
                 elif cmd == '/lists':
-                    bot.load_list(nicks=True, accounts=True, strings=True, ultras=True)
+                    bot.load_list(nicks=True, accounts=True, strings=True, ultras=True, whitelist=True)
+                    print ('lists reloaded.')
+
+                elif cmd == '/skynet':
+                    gm = raw_input('enter SKYNET message: ')
+                    derp =  u'\u2605'
+                    bot.send_bot_msg(derp + ' *SKYNET:* ' + gm)
 
             else:
                 bot.send_chat_msg(chat_msg)

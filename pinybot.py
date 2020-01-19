@@ -119,6 +119,11 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             #self.send_bot_msg(unicode_catalog.TOXIC + '*Auto-Banned:* (bad account)')
                     if _user.account in pinylib.CONFIG.B_ULTRAS:
                         _user.user_level = 2
+                    if pinylib.CONFIG.B_VIPMODE and self._is_client_mod:
+                        if _user.account not in pinylib.CONFIG.B_WHITELIST:
+                            self.send_ban_msg(_user.nick, _user.id)
+                            if pinylib.CONFIG.B_FORGIVE_AUTO_BANS:
+                                self.send_forgive_msg(_user.id)
 
             else:
                 _user.user_level = 6
@@ -150,7 +155,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         # receiving the 'joins' information).
         if self._is_client_mod:
             self.send_banlist_msg()
-            self.load_list(nicks=True, accounts=True, strings=True, ultras=True)
+            self.load_list(nicks=True, accounts=True, strings=True, ultras=True, whitelist=True)
             for uhoes in self.users.signed_in:
                 if uhoes.account in pinylib.CONFIG.B_ULTRAS and uhoes.account != self.account:
                     uhoes.user_level = 2
@@ -160,6 +165,9 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             threading.Thread(target=self.get_privacy_settings).start()
 
         self.console_write(pinylib.COLOR['cyan'], 'Received all joins information from the server.')
+        #zzzzq
+        if len(self.users.nli) > 0:
+            self.do_purge()
 
     def on_avon(self, uid, name):
         """
@@ -544,7 +552,12 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 elif cmd == prefix + 'afb':
                     pinylib.config.B_FORGIVE_AUTO_BANS = not pinylib.config.B_FORGIVE_AUTO_BANS
                 #zazz2
-                
+
+                elif cmd == prefix + 'vip':
+                    self.do_vip()
+
+                elif cmd == prefix + 'vipurge':
+                    self.do_vipurge()
 
             # Mod commands.
             if self.has_level(3):
@@ -570,6 +583,8 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 elif cmd == prefix + 'topic':
                     self.do_topic(cmd_arg)
 
+                elif cmd == prefix + 'wl':
+                    self.do_whitelist(cmd_arg)
 
 
                 #elif cmd == prefix + 'list':
@@ -902,6 +917,38 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         self.send_bot_msg(unicode_catalog.scircle + ' *gate is:* ' + gs)
         self.console_write(pinylib.COLOR['wgate'], '-] the gate is now ' + gs + ' [-')
 
+    def do_whitelist(self, wlacct):
+        if self._is_client_mod:
+            if len(wlacct) is 0:
+                self.send_bot_msg(unicode_catalog.INDICATE + ' Account can\'t be blank.')
+            elif wlacct in pinylib.CONFIG.B_WHITELIST:
+                self.send_bot_msg(unicode_catalog.scircle + ' %s is already in whitelist.' % wlacct)
+            else:
+                pinylib.file_handler.file_writer(self.config_path(),
+                                                 pinylib.CONFIG.B_WHITELIST_FILE_NAME, wlacct)
+                self.send_bot_msg(unicode_catalog.scircle + ' *%s* was added to whitelist.' % wlacct)
+                self.load_list(whitelist=True)
+
+    def do_vip(self):
+        #
+        #self.send_bot_msg(unicode_catalog.scircle + ' soon...')
+        pinylib.CONFIG.B_VIPMODE = not pinylib.CONFIG.B_VIPMODE
+        if pinylib.CONFIG.B_VIPMODE:
+            ss = 'active'
+        else:
+            ss = 'inactive'
+        self.send_bot_msg(unicode_catalog.scircle + ' *vip mode is:* ' + ss)
+
+    def do_vipurge(self):
+        #
+        for hoecheck in self.users.signed_in:
+            if hoecheck.account not in pinylib.CONFIG.B_WHITELIST:
+                self.send_ban_msg(hoecheck.nick, hoecheck.id)
+                if pinylib.CONFIG.B_FORGIVE_AUTO_BANS:
+                    self.send_forgive_msg(hoecheck.id)
+        if len(self.users.nli) > 0:
+            self.do_purge()
+
     def do_purge(self):
         for hoecheck in self.users.nli:
             print (hoecheck.nick)
@@ -933,6 +980,11 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             afbs = 'active'
         else:
             afbs = 'inactive'
+        if pinylib.CONFIG.B_VIPMODE:
+            vipm = 'active'
+        else:
+            vipm = 'inactive'
+        self.send_bot_msg(unicode_catalog.scircle + ' *screen is:* ' + ss)
         modz = str(len(self.users.mods))
         nliz = str(len(self.users.nli))
         normz = str(len(self.users.norms) - len(self.users.nli))
@@ -942,6 +994,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         self.console_write(pinylib.COLOR['ugate'], '[-] the screen is ' + ss)
         self.console_write(pinylib.COLOR['ugate'], '[-] uptime ' + uptimez)
         self.console_write(pinylib.COLOR['ugate'], '[-] auto-forgive ' + afbs)
+        self.console_write(pinylib.COLOR['ugate'], '[-] vip mode ' + vipm)
         self.console_write(pinylib.COLOR['ugate'], '[-] mods [' + modz + '] - users [' + normz + '] - guests [' + nliz + '] [-]')
         
 
@@ -2557,7 +2610,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         return path
 
     # TODO: Implement blocked media lists.
-    def load_list(self, nicks=False, accounts=False, strings=False, ultras=False):
+    def load_list(self, nicks=False, accounts=False, strings=False, ultras=False, whitelist=False):
         """
         Loads different list to memory.
         :param nicks: bool, True load nick bans file.
@@ -2577,6 +2630,9 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         if ultras:
             pinylib.CONFIG.B_ULTRAS = pinylib.file_handler.file_reader(self.config_path(),
                                                                             pinylib.CONFIG.B_ULTRAS_FILE_NAME)
+        if whitelist:
+            pinylib.CONFIG.B_WHITELIST = pinylib.file_handler.file_reader(self.config_path(),
+                                                                            pinylib.CONFIG.B_WHITELIST_FILE_NAME)
 
         # if blocked_media:
         #     pinylib.CONFIG.B_BLOCKED_MEDIA = pinylib.file_handler.file_reader(self.config_path(),
